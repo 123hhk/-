@@ -2,6 +2,7 @@
 import Top from '@/components/Top.vue'
 import ArticleHeader from "@/components/ArticleHeader.vue";
 import ReadRanking from '../components/ReadRanking.vue';
+import LikeRanking from '../components/LikeRanking.vue';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import { reactive, inject, ref, computed } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router';
@@ -14,16 +15,22 @@ const axios = inject('axios')
 const toArticle = inject('toArticle')
 
 // --- 状态控制 ---
-const isImmersionMode = ref(false)
-const loading = ref(false)
-const noMore = ref(false)
-const currentTag = ref('')
+const isImmersionMode = ref(false) // 沉浸模式开关
+const loading = ref(false)         // 加载锁
+const noMore = ref(false)          // 是否到底
+const currentTag = ref('')         // 当前选中的标签
 
 const data = reactive({
   "articles": [],
-  "rankingList": [],
-  "tags": [],
-  "pageParams": { "page": store.home.page, "rows": 10, "total": 0 },
+  "rankingList": [],      // 阅读排行榜
+  "likeRankingList": [],  // 点赞排行榜
+  "tags": [],             // 标签列表
+  "pageParams": {
+    "page": store.home.page,
+    "rows": 10,
+    "total": 0,
+    "sort": "new" // 【新增】默认为最新 ('new' | 'hot')
+  },
 })
 
 // --- 布局配置 ---
@@ -42,28 +49,31 @@ const sidebarLayout = computed(() => {
 // === 1. 初始化 ===
 function init() {
   loading.value = true;
-  // 获取首页数据
+  // 获取首页数据 (注意：getIndexData1 可能不支持 sort，建议统一用 getAPage 逻辑，或者这里仅获取排行榜)
+  // 为了保证 sort 生效，我们这里手动调用一次 getAPage 来获取文章列表， separate rankings fetch
+
+  // 1. 获取排行榜和标签 (这些不需要频繁刷新)
   axios.post("/api/article/getIndexData1", data.pageParams).then(res => {
-    loading.value = false;
     if (res.data.success) {
-      data.articles = res.data.map.articles || [];
+      // 这里只取排行榜，文章列表由 getAPage 接管以支持排序
       data.rankingList = res.data.map.articleVOs || [];
-      if (res.data.map.pageParams) {
-        data.pageParams.total = res.data.map.pageParams.total;
-      }
-    } else {
-      ElMessage.error("数据加载失败");
     }
-  }).catch(e => {
-    loading.value = false;
   });
 
-  // 获取标签
   axios.get("/api/article/getAllTags").then(res => {
     if (res.data.success) {
       data.tags = res.data.map.tags || [];
     }
   });
+
+  axios.get("/api/article/getLikeRanking").then(res => {
+    if (res.data.success) {
+      data.likeRankingList = res.data.map.articleVOs || [];
+    }
+  });
+
+  // 2. 获取第一页文章 (带默认排序)
+  getAPage();
 }
 init();
 
@@ -71,24 +81,21 @@ init();
 function getAPage(isAppend = false) {
   if (!isAppend) {
     loading.value = true;
-    // 如果是重新搜索，先清空列表，让用户知道正在刷新
     if (data.pageParams.page === 1) {
       data.articles = [];
     }
   }
 
   let url = '/api/article/getAPageOfArticle';
-  // 关键：深拷贝参数，防止污染
   let postData = JSON.parse(JSON.stringify(data.pageParams));
 
   // 如果处于标签筛选模式
   if (currentTag.value) {
     url = '/api/article/articleSearch';
-    // 构造后端需要的 ArticleSearch 结构
     postData = {
       pageParams: { ...data.pageParams },
       articleCondition: {
-        tag: currentTag.value // 传入后端新增的字段
+        tag: currentTag.value
       }
     }
   }
@@ -102,19 +109,16 @@ function getAPage(isAppend = false) {
         data.pageParams.total = response.data.map.pageParams.total;
       }
 
-      // 没数据处理
       if (newArticles.length === 0) {
         noMore.value = true;
         if (!isAppend) {
           data.articles = [];
-          if (currentTag.value) {
-            ElMessage.warning(`标签【${currentTag.value}】下暂无文章`);
-          }
+          // 仅提示，不弹窗打扰
+          // if(currentTag.value) ElMessage.info("暂无相关文章");
         }
         return;
       }
 
-      // 有数据处理
       if (isAppend) {
         data.articles.push(...newArticles)
       } else {
@@ -127,7 +131,6 @@ function getAPage(isAppend = false) {
   }).catch((error) => {
     loading.value = false;
     console.error("请求错误:", error);
-    ElMessage.error("网络或服务器异常"); // 提示用户
   })
 }
 
@@ -147,12 +150,9 @@ function loadMore() {
   }, 500);
 }
 
-// 点击标签 (修复状态切换问题)
+// 点击标签
 function selectTag(tag) {
-  // 强制转为字符串对比，防止类型不一致
   const clickedTag = String(tag);
-
-  // 如果点击的是当前选中的，或者是点"全部"（空字符串），则视为取消
   if (currentTag.value === clickedTag || clickedTag === '') {
     if (currentTag.value !== '') ElMessage.info("已显示全部文章");
     currentTag.value = '';
@@ -161,13 +161,19 @@ function selectTag(tag) {
     ElMessage.success(`正在筛选: ${clickedTag}`);
   }
 
-  // 重置查询状态
   data.pageParams.page = 1;
   noMore.value = false;
-  loading.value = false;
-
-  // 立即查询
+  // 切换标签时，默认回退到"最新"排序可能体验更好，也可以保留当前排序
   getAPage(false);
+}
+
+// 【新增】排序切换
+function handleSortChange(val) {
+  data.pageParams.sort = val; // 'new' or 'hot'
+  data.pageParams.page = 1;
+  noMore.value = false;
+  data.articles = [];
+  getAPage(false); // 重新加载第一页
 }
 
 function handleModeSwitch(val) {
@@ -181,9 +187,9 @@ function handleModeSwitch(val) {
     ElMessage.success("进入沉浸阅读模式")
   } else {
     ElMessage.info("已切换回普通模式")
-    // 切换模式时保留当前的筛选状态
     if (!currentTag.value) {
-      init();
+      // 保持当前排序状态重新加载
+      getAPage(false);
     } else {
       getAPage(false);
     }
@@ -217,8 +223,14 @@ const disabled = computed(() => loading.value || noMore.value)
       <div class="tool-bar">
         <el-tag v-if="currentTag" closable type="warning" @close="selectTag(currentTag)"
           style="margin-right: auto; font-size: 14px; padding: 18px 10px;">
-          当前标签: {{ currentTag }} (点击取消)
+          当前标签: {{ currentTag }}
         </el-tag>
+
+        <el-radio-group v-model="data.pageParams.sort" size="small" @change="handleSortChange"
+          style="margin-left: auto; margin-right: 15px;">
+          <el-radio-button label="new">最新</el-radio-button>
+          <el-radio-button label="hot">最热</el-radio-button>
+        </el-radio-group>
 
         <span class="mode-label">阅读模式：</span>
         <el-switch v-model="isImmersionMode" inline-prompt active-text="沉浸" inactive-text="分页"
@@ -307,6 +319,13 @@ const disabled = computed(() => loading.value || noMore.value)
         </legend>
         <ReadRanking :articleVOs="data.rankingList" />
       </fieldset>
+
+      <fieldset align="left">
+        <legend>
+          <h3>点赞风云榜</h3>
+        </legend>
+        <LikeRanking :articleVOs="data.likeRankingList" />
+      </fieldset>
     </el-col>
 
   </el-row>
@@ -328,7 +347,6 @@ fieldset {
   padding: 15px;
 }
 
-/* 标签云样式优化 */
 .tag-cloud {
   display: flex;
   flex-wrap: wrap;
@@ -355,6 +373,8 @@ fieldset {
   margin-bottom: 15px;
   padding-right: 5px;
   min-height: 40px;
+  flex-wrap: wrap;
+  /* 防止小屏换行错乱 */
 }
 
 .mode-label {

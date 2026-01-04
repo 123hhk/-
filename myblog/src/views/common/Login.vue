@@ -25,11 +25,11 @@ const user = reactive({
 const rules = reactive({
   username: [
     { required: true, message: '请输入用户名！', trigger: 'blur' },
-    { min: 2, max: 10, message: '长度3-10', trigger: 'blur' }
+    { min: 2, max: 100, message: '长度3-100', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码！', trigger: 'blur' },
-    { min: 4, max: 10, message: '长度3-10', trigger: 'blur' },
+    { min: 4, max: 100, message: '长度3-100', trigger: 'blur' },
     {
       pattern: /[A-Za-z0-9_\~\u4e00-\u9fa5]+/,
       message: '请输入正确的密码',

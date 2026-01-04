@@ -77,4 +77,23 @@ public class ReplyController {
         }
         return result;
     }
+
+    // 【新增】删除回复接口
+    @PostMapping("/deleteById")
+    public Result deleteById(Integer id) {
+        Result result = new Result();
+        try {
+            // 直接调用 Mapper 删除
+            int count = replyMapper.deleteById(id);
+            if (count > 0) {
+                result.setMsg("删除成功!");
+            } else {
+                result.setErrorMessage("删除失败: 回复不存在");
+            }
+        } catch (Exception e) {
+            result.setErrorMessage("删除失败!");
+            e.printStackTrace();
+        }
+        return result;
+    }
 }

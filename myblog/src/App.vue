@@ -53,10 +53,17 @@ const toAdminMain = () => {
   router.push({ name: 'adminMain' })
 }
 
-function toArticle() {
-  router.push({ name: 'articleAndComment', params: { articleId: 20 } })
-}
+// ✅ 修复：接收 article 参数，并读取它的 id
+function toArticle(article) {
+  // 增加兼容性：既支持传 article 对象，也支持直接传 ID 数字
+  let id = article.id || article
 
+  if (id) {
+    router.push({ name: 'articleAndComment', params: { articleId: id } })
+  } else {
+    console.error("跳转失败：无效的文章ID", article)
+  }
+}
 provide('toAdminMain', toAdminMain)
 provide('toArticle', toArticle)
 provide('toHome', toHome)

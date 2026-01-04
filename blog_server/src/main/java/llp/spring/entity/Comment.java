@@ -77,4 +77,8 @@ public class Comment implements Serializable {
      * IP属地
      */
     private String location; // 【新增】
+    /**
+     * 【新增】评论点赞数
+     */
+    private Integer likes;
 }

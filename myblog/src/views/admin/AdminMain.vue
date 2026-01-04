@@ -67,7 +67,7 @@ function toExit() {
         <el-col>
           <el-menu router active-text-color="white" background-color="#545c64" text-color="#fff"
             :collapse="aside_state.collapse" :collapse-transition="false">
-            <el-menu-item>
+            <el-menu-item index="/admin_Main/dashboard">
               <el-icon>
                 <Odometer />
               </el-icon>

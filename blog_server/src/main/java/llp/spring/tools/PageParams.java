@@ -15,6 +15,8 @@ public class PageParams {
     // 【新增】字段
     private String author;
 
+    // === 【新增】排序字段: "new" 或 "hot" ===
+    private String sort;
     // 【新增】手动编写的 Getter
     public String getAuthor() {
         return author;

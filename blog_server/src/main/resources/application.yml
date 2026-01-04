@@ -25,7 +25,7 @@ mybatis-plus:
 
 # 自定义文件上传路径
 file:
-  upload-images-dir: C:\Users\24928\Pictures\img\
+  upload-images-dir: C:\Users\24928\Pictures\images\
   # [新增] 新的头像/文件上传保存路径 (注意最后带上斜杠)
-  upload-avatar-dir: C:\Users\24928\Pictures\imgs\
-  article-img-dir: C:\Users\24928\Pictures\images\
+  upload-avatar-dir: C:\Users\24928\Pictures\img\
+  article-img-dir: C:\Users\24928\Pictures\imgs\

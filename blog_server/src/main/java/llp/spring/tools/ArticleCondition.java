@@ -13,12 +13,13 @@ import java.util.Date;
 public class ArticleCondition {
     // 代表查询条件：可以根据文章标题、创建时间上限和下限查询文章
     private String title;
-    private String tag;
-
 
     @JsonFormat(pattern = "yyyy-MM-dd") // 设定日期的格式，方便客户端和服务器端数据交互
     private Date startDate;    // 客户端传过来的数据应该是年月日格式
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private Date endDate;
+
+    // 【新增】标签查询字段
+    private String tag;
 }

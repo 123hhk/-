@@ -12,5 +12,6 @@ public class ArticleVO {
     private String categories; // 文章分类
     private Integer hits; // 点击量
     private String thumbnail;  // 缩略图
-    private String authorName; // 作者名
+    private String authorName; // 作者
+    private Integer likes; // 点赞数
 }

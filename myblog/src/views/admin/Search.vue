@@ -1,8 +1,8 @@
 <script setup>
 import Top from "@/components/Top.vue";
-import { reactive, inject, onMounted, ref } from 'vue'
+import { reactive, inject, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { dateFormat } from "@/js/tool.js"; // 导入日期格式化函数
+import { dateFormat } from "@/js/tool.js";
 import { Search, Refresh, Loading } from '@element-plus/icons-vue'
 
 const data = reactive({
@@ -30,8 +30,29 @@ onMounted(() => {
   search()
 })
 
+// 防抖函数
+function debounce(fn, delay) {
+  let timer = null;
+  return function () {
+    if (timer) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(() => {
+      fn.apply(this, arguments)
+    }, delay)
+  }
+}
+
+// 监听搜索关键词
+watch(
+  () => data.articleCondition.title,
+  debounce((newVal) => {
+    data.pageParams.page = 1
+    doSearch()
+  }, 500)
+)
+
 function search() {
-  // 重置到第一页（如果是新的搜索）
   if (data.pageParams.page === 1) {
     doSearch()
   } else {
@@ -51,13 +72,12 @@ function doSearch() {
       myData.articleVOs = response.data.map.articleVOs || []
       data.pageParams.total = response.data.map.pageParams?.total || 0
     } else {
-      ElMessageBox.alert(response.data.msg || '查询失败', '提示')
+      console.warn(response.data.msg || '查询失败')
       myData.articleVOs = []
       data.pageParams.total = 0
     }
   }).catch((error) => {
     console.error("查询错误:", error)
-    ElMessageBox.alert("系统错误，请稍后再试！", '错误')
     myData.articleVOs = []
     data.pageParams.total = 0
   }).finally(() => {
@@ -65,20 +85,17 @@ function doSearch() {
   })
 }
 
-// 处理页码变化
 function handleCurrentChange(page) {
   data.pageParams.page = page
   doSearch()
 }
 
-// 处理每页条数变化
 function handleSizeChange(rows) {
   data.pageParams.rows = rows
   data.pageParams.page = 1
   doSearch()
 }
 
-// 清空查询条件
 function clearSearch() {
   data.articleCondition.title = ""
   data.articleCondition.startDate = ""
@@ -93,14 +110,17 @@ function clearSearch() {
     <Top />
   </el-affix>
 
-  <!-- 查询条件 -->
   <el-row justify="center" style="margin-top:30px">
     <el-col :span="12">
-      <el-input v-model="data.articleCondition.title" placeholder="请输入文章标题关键字" clearable @keyup.enter="search"
-        :disabled="loading">
+      <el-input v-model="data.articleCondition.title" placeholder="请输入文章标题关键字" clearable>
         <template #prefix>
           <el-icon>
             <Search />
+          </el-icon>
+        </template>
+        <template #suffix v-if="loading">
+          <el-icon class="is-loading">
+            <Loading />
           </el-icon>
         </template>
       </el-input>
@@ -111,9 +131,9 @@ function clearSearch() {
     <el-col :span="12">
       <el-space :size="40">
         <el-date-picker value-format="YYYY-MM-DD" v-model="data.articleCondition.startDate" type="date"
-          placeholder="起始日期" :disabled="loading" />
-        <el-date-picker value-format="YYYY-MM-DD" v-model="data.articleCondition.endDate" type="date" placeholder="结束日期"
-          :disabled="loading" />
+          placeholder="起始日期" />
+        <el-date-picker value-format="YYYY-MM-DD" v-model="data.articleCondition.endDate" type="date"
+          placeholder="结束日期" />
         <el-button type="primary" @click="search" :loading="loading">
           <el-icon v-if="!loading">
             <Search />
@@ -130,11 +150,9 @@ function clearSearch() {
     </el-col>
   </el-row>
 
-  <!-- 查询结果 -->
   <el-row>
     <el-col :span="1"></el-col>
     <el-col :span="22">
-      <!-- 显示查询结果统计 -->
       <div v-if="loading" style="margin-bottom: 10px; color: #409EFF;">
         <el-icon class="is-loading">
           <Loading />
@@ -170,7 +188,6 @@ function clearSearch() {
         <el-table-column prop="hits" label="点击量" width="100" />
       </el-table>
 
-      <!-- 分页组件 -->
       <div v-if="data.pageParams.total > 0 && !loading" style="margin-top: 20px; text-align: center;">
         <el-pagination v-model:current-page="data.pageParams.page" v-model:page-size="data.pageParams.rows"
           :page-sizes="[5, 10, 15, 20]" :total="data.pageParams.total" layout="total, sizes, prev, pager, next, jumper"

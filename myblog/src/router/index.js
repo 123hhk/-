@@ -50,8 +50,15 @@ const routes = [
     path: '/admin_Main',
     name: 'adminMain',
     component: () => import('@/views/admin/AdminMain.vue'),
-    // redirect: '/admin_Main/manage_article', // 建议：访问后台主页时默认跳转到一个子页面
+    redirect: '/admin_Main/dashboard', // 【新增】默认跳到仪表盘
+
     children: [
+      {
+        path: 'dashboard', // 子路由路径
+        name: 'Dashboard',
+        component: () => import('@/views/admin/Dashboard.vue'),
+        meta: { title: '数据仪表盘' },
+      },
       {
         path: 'publish_article',
         name: 'publishArticle',

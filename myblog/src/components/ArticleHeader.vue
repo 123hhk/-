@@ -1,93 +1,188 @@
 <script setup>
-import { dateFormat } from "@/js/tool.js"
-import { ref, computed } from 'vue'
+import { defineProps, inject } from 'vue'
+// 【新增】引入 Loading 和 Picture 图标
+import { Calendar, User, LocationInformation, Loading, Picture } from '@element-plus/icons-vue'
 
 const props = defineProps(['article'])
-const size = ref(40)
+const toArticle = inject('toArticle')
 
-const formatDate = (dateInput) => {
-  if (!dateInput) return '未知日期'
-  try {
-    let date
-    if (typeof dateInput === 'number' || /^\d+$/.test(dateInput)) {
-      const timestamp = typeof dateInput === 'number' ? dateInput : parseInt(dateInput)
-      if (timestamp.toString().length === 10) {
-        date = new Date(timestamp * 1000)
-      } else {
-        date = new Date(timestamp)
-      }
-    } else {
-      date = new Date(dateInput)
-    }
-    if (isNaN(date.getTime())) return '无效日期'
-    return dateFormat(date, 'yyyy-MM-dd HH:mm:ss')
-  } catch (error) {
-    return '日期错误'
-  }
+function gotoArticle() {
+  toArticle(props.article)
 }
-
-const formattedDate = computed(() => {
-  return formatDate(props.article.created)
-})
 </script>
 
 <template>
-  <el-row>
-    <el-col :sm="24" :md="11">
-      <el-image :src="props.article.thumbnail" />
-    </el-col>
-    <el-col :sm="0" :md="1"></el-col>
-    <el-col :sm="24" :md="12">
-      <el-row align="middle">
-        <el-space :size="size">
-          <span id="categories" class="categories-height" v-html="props.article.categories"></span>
+  <el-card class="article-card" shadow="hover" @click="gotoArticle">
+    <div class="card-content">
+      <div class="thumbnail-wrapper" v-if="article.thumbnail">
+        <el-image :src="article.thumbnail" fit="cover" class="thumbnail" lazy>
 
-          <span class="categories-height" v-if="props.article.authorName">
-            <el-icon style="vertical-align: middle; margin-right: 2px">
-              <User />
-            </el-icon>
-            {{ props.article.authorName }}
-          </span>
+          <template #placeholder>
+            <div class="image-slot loading-slot">
+              <el-icon class="is-loading">
+                <Loading />
+              </el-icon>
+              <span style="margin-left: 5px; font-size: 12px;">加载中...</span>
+            </div>
+          </template>
 
-          <span class="categories-height">发布于 {{ formattedDate }}</span>
-        </el-space>
-      </el-row>
-      <el-row align="middle">
-        <router-link :to="{ name: 'articleAndComment', params: { articleId: props.article.id } }" class="title-link">
-          <span class="title" v-html="props.article.title"></span>
-        </router-link>
-      </el-row>
-      <el-row align="middle">
-        <span v-if="props.article.content" v-html="props.article.content.substring(0, 90)"></span>
-        <span v-else style="color: #999; font-size: 14px;">(暂无摘要)</span>
-      </el-row>
-    </el-col>
-    <el-col :span="1"></el-col>
-  </el-row>
-  <el-divider />
+          <template #error>
+            <div class="image-slot error-slot">
+              <el-icon>
+                <Picture />
+              </el-icon>
+            </div>
+          </template>
+
+        </el-image>
+      </div>
+
+      <div class="info-wrapper">
+        <h3 class="title">{{ article.title }}</h3>
+
+        <p class="summary">
+          {{ article.content ? article.content.replace(/<[^>]+>/g, '').substring(0, 120) + '...' : '暂无摘要' }}
+        </p>
+
+        <div class="meta-footer">
+          <div class="meta-left">
+            <el-tag size="small" type="info" effect="plain" class="meta-tag">
+              <el-icon>
+                <Calendar />
+              </el-icon> 发布于: {{ article.created }}
+            </el-tag>
+
+            <el-tag v-if="article.location" size="small" type="success" effect="plain" class="meta-tag">
+              <el-icon>
+                <LocationInformation />
+              </el-icon> {{ article.location }}
+            </el-tag>
+          </div>
+
+          <div class="meta-right">
+            <span class="author">
+              <el-icon>
+                <User />
+              </el-icon> {{ article.author || '匿名' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </el-card>
 </template>
 
 <style scoped>
-#categories:hover {
-  color: #10007A;
+.article-card {
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.categories-height {
-  line-height: 40px;
+.article-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.card-content {
+  display: flex;
+  height: 160px;
+}
+
+.thumbnail-wrapper {
+  width: 240px;
+  margin-right: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s;
+}
+
+/* === 【新增】占位图样式 === */
+.image-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  font-size: 20px;
+}
+
+/* 加载中的背景色：你指定的 #5f9ea0 (卡杰特蓝) */
+.loading-slot {
+  background-color: #5f9ea0;
+}
+
+/* 加载失败的背景色：淡灰色 */
+.error-slot {
+  background-color: #f5f7fa;
+  color: #909399;
+}
+
+.article-card:hover .thumbnail {
+  transform: scale(1.05);
+}
+
+.info-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .title {
-  color: #0f9ae0;
+  margin: 0 0 10px 0;
   font-size: 20px;
-  line-height: 40px;
+  color: #303133;
+  font-weight: bold;
 }
 
-.title-link {
-  text-decoration: none;
+.title:hover {
+  color: #409EFF;
 }
 
-.title-link:hover .title {
-  color: #10007A;
-  cursor: pointer;
+.summary {
+  font-size: 14px;
+  color: #606266;
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.meta-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #eee;
+}
+
+.meta-left {
+  display: flex;
+  gap: 10px;
+}
+
+.meta-right {
+  font-size: 14px;
+  color: #606266;
+  font-weight: bold;
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

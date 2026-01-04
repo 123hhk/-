@@ -55,6 +55,12 @@ public class Article implements Serializable {
     @TableField(exist = false)
     private String authorName;
 
+    private String author;
 
+    // 【新增】发布地点
+    private String location;
+    // === 【新增】点赞数（非数据库字段，用于接收连表查询结果） ===
+    @TableField(exist = false)
+    private Integer likes;
 }
 

@@ -3,96 +3,88 @@ package llp.spring.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import llp.spring.entity.Article;
+import llp.spring.entity.Comment; // 【新增】引入 Comment 实体
 import llp.spring.entity.Statistic;
+import llp.spring.entity.User;
 import llp.spring.entity.vo.ArticleVO;
+import llp.spring.mapper.ArticleMapper;
 import llp.spring.mapper.CommentMapper;
 import llp.spring.mapper.StatisticMapper;
-import llp.spring.entity.Article;
+import llp.spring.mapper.UserMapper;
+import llp.spring.service.ArticleService;
 import llp.spring.tools.ArticleSearch;
 import llp.spring.tools.PageParams;
 import llp.spring.tools.Result;
-
-import llp.spring.service.ArticleService;
-import llp.spring.mapper.ArticleMapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import lombok.SneakyThrows;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import lombok.SneakyThrows;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.jsoup.nodes.Document;
 
 import java.io.File;
-import java.sql.Wrapper;
 import java.text.SimpleDateFormat;
-
-// 20251217新增功能 - 修改DATE为DATETIME
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import java.util.Date;
-
-import org.springframework.beans.factory.annotation.Value;
-
-import org.springframework.cache.annotation.Cacheable; // 导入注解
-
-// 导入必要的包
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import llp.spring.mapper.ArticleMapper;
-import llp.spring.entity.Article;
-import llp.spring.service.ArticleService;
-import org.springframework.stereotype.Service;
-// ... 其他原本的 import
-
-@Service // Spring注解，系统会自动创建该类的一个对象
+@Service
 @Transactional
 public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService  {
 
-    // 1. 注入路径
     @Value("${file.upload-images-dir}")
     private String uploadImagesDir;
 
-    @Autowired // 注入系统自动创建的ArticleMapper对象
+    @Autowired
     private ArticleMapper articleMapper;
 
     @Autowired
-    private CommentMapper commentMapper;;
+    private CommentMapper commentMapper;
 
     @Autowired
     private StatisticMapper statisticMapper;
-    @Autowired
-    private ArticleService articleService;
 
+    @Autowired
+    private UserMapper userMapper;
+
+    // === 核心辅助方法：根据 user_id 填充作者真名 ===
+    private void fillArticleAuthor(Article article) {
+        if (article != null && article.getUserId() != null) {
+            User user = userMapper.selectById(article.getUserId());
+            if (user != null) {
+                // 覆盖作者名，确保前端显示的是最新的用户昵称
+                article.setAuthor(user.getUsername());
+                article.setAuthorName(user.getUsername());
+            }
+        }
+    }
+
+    // 1. 文章搜索
     public Result articleSearch(ArticleSearch articleSearch) {
         QueryWrapper<ArticleVO> wrapper = new QueryWrapper<>();
         wrapper.orderBy(true, false, "a.id");
 
-        // 设置查询条件
         if (articleSearch.getArticleCondition().getTitle() != null &&
                 !articleSearch.getArticleCondition().getTitle().trim().isEmpty()) {
             wrapper.like("a.title", articleSearch.getArticleCondition().getTitle());
         }
 
-        // === 【新增代码 START】 ===
-        // 如果 tag 字段不为空，则进行模糊查询
-        // 注意：这里假设你的 tags 存的是 "Java,Spring" 这种字符串
-        // 使用 like 查询包含该标签的文章
+        if (articleSearch.getArticleCondition().getStartDate() != null) {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            wrapper.ge("a.created", sdf.format(articleSearch.getArticleCondition().getStartDate()) + " 00:00:00");
+        }
+
+        // 【必须存在】标签模糊查询
         if (articleSearch.getArticleCondition().getTag() != null &&
                 !articleSearch.getArticleCondition().getTag().trim().isEmpty()) {
             wrapper.like("a.tags", articleSearch.getArticleCondition().getTag());
-        }
-        // === 【新增代码 END】 ===
-
-        // 日期范围查询 - 使用 Date 类型
-        if (articleSearch.getArticleCondition().getStartDate() != null) {
-            // 将 Date 转换为字符串格式
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-            wrapper.ge("a.created", sdf.format(articleSearch.getArticleCondition().getStartDate()) + " 00:00:00");
         }
 
         if (articleSearch.getArticleCondition().getEndDate() != null) {
@@ -104,83 +96,84 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
                 articleSearch.getPageParams().getRows());
         IPage<ArticleVO> aPage = articleMapper.articleSearch(page, wrapper);
 
-
-        if (aPage.getRecords() != null && !aPage.getRecords().isEmpty()) {
-            for (ArticleVO vo : aPage.getRecords()) {
-                String content = vo.getContent();
-                if (content != null) {
-                    // 1. 去除 HTML 标签
-                    Document doc = Jsoup.parse(content);
-                    String text = doc.text();
-                    // 2. 截取前 100 字
-                    if (text.length() > 100) {
-                        text = text.substring(0, 99) + "......";
-                    }
-                    vo.setContent(text);
-                } else {
-                    vo.setContent(""); // 防止为 null
-                }
-            }
-        }
         Result result = new Result();
         articleSearch.getPageParams().setTotal(aPage.getTotal());
         result.getMap().put("articleVOs", aPage.getRecords());
         result.getMap().put("pageParams", articleSearch.getPageParams());
         result.setSuccess(true);
 
+
         return result;
     }
 
+    // 2. 分页获取文章列表
     public Result getAPageOfArticle(PageParams pageParams) {
+        Page<Article> page = new Page<>(pageParams.getPage(), pageParams.getRows());
         QueryWrapper<ArticleVO> wrapper = new QueryWrapper<>();
-        wrapper.orderBy(true, false, "t_article.id");
 
-        Page<Article> page = new Page<Article>(pageParams.getPage(), pageParams.getRows());
-        IPage<Article> aPage = articleMapper.getAPageOfArticle(page, wrapper);
+        // === 【核心修改】排序逻辑 ===
+        // 如果前端传了 sort=hot，则按点赞数(s.likes)倒序
+        // 否则默认按 id 倒序 (最新发布)
+        if ("hot".equals(pageParams.getSort())) {
+            wrapper.orderByDesc("s.likes");
+        } else {
+            wrapper.orderByDesc("t_article.id");
+        }
+        // ==========================
 
-        Result result = new Result();
-        pageParams.setTotal(aPage.getTotal());
+        IPage<Article> iPage = articleMapper.getAPageOfArticle(page, wrapper);
 
-        // 只返回部分文章内容
-        if(aPage.getRecords() != null && aPage.getRecords().size() > 0) {
-            for(Article article : aPage.getRecords()) {
-                Document doc = Jsoup.parse(article.getContent());
-                String content = doc.text(); // text方法返回全部非html代码的内容（消除html代码）
-                if(content.length() > 100) {
-                    content = content.substring(0, 99) + "......";
+        // 处理文章摘要 (去除HTML标签，截取前100字)
+        if (iPage.getRecords() != null) {
+            for (Article article : iPage.getRecords()) {
+                if (article.getContent() != null) {
+                    // 使用正则去除HTML标签
+                    String text = article.getContent().replaceAll("<[^>]+>", "");
+                    // 截取
+                    if (text.length() > 100) {
+                        text = text.substring(0, 99) + "...";
+                    }
+                    article.setContent(text);
                 }
-                article.setContent(content);
             }
         }
-        result.getMap().put("articles", aPage.getRecords());
+
+        Result result = new Result();
+        pageParams.setTotal(iPage.getTotal());
+        result.getMap().put("articles", iPage.getRecords());
         result.getMap().put("pageParams", pageParams);
+        result.setSuccess(true);
         return result;
     }
 
-    // 方法2：获取首页数据（重载方法）
+    // 3. 获取首页数据
     public Result getIndexData(PageParams pageParams) {
-        // 定义索引页
-        Result result = getAPageOfArticle(pageParams); // 重用本类的方法，分页查询文章
+        Result result = getAPageOfArticle(pageParams);
 
-        // 获取点击量排名前十文章
         PageParams pageParams1 = new PageParams();
         pageParams1.setPage(1);
         pageParams1.setRows(10L);
         Result result1 = getAPageOfArticleVO(pageParams1, "hits");
         result.getMap().put("articleVOs", result1.getMap().get("articleVOs"));
-
         return result;
     }
 
     public Result getIndexData(){
         Result result = new Result();
+
+        // 轮播图数据
         List<Article> articles = articleMapper.getAPage(0L, 5L);
+        if (articles != null) {
+            for (Article article : articles) {
+                fillArticleAuthor(article); // 记得给轮播图也填充作者
+            }
+        }
         result.getMap().put("articles", articles);
 
+        // 排行榜数据
         PageParams pageParams = new PageParams();
         pageParams.setPage(1L);
-        pageParams.setRows(10L);     // 调用本类的方法
-
+        pageParams.setRows(10L);
         Result result1 = getAPageOfArticleVO(pageParams, "hits");
         result.getMap().put("articleVOs", result1.getMap().get("articleVOs"));
 
@@ -189,10 +182,6 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     public Result getAPageOfArticleVO(PageParams pageParams, String type) {
         QueryWrapper<ArticleVO> wrapper = new QueryWrapper<ArticleVO>();
-
-        // 修改这里：使用 apply 方法来设置连接条件
-        //wrapper.apply("t_article.id = t_statistic.article_id");
-
         if("id".equals(type)) {
             wrapper.orderBy(true, false, "t_article.id");
         } else if("hits".equals(type)) {
@@ -209,24 +198,26 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         return result;
     }
 
+    // 4. 获取文章详情及评论
     public Result getArticleAndFirstPageCommentByArticleId(Integer articleId, PageParams pageParams){
-        Result result=new Result();
-        result.getMap().put("article",articleService.selectById(articleId));
+        Result result = new Result();
+
+        // 使用 this.selectById(articleId) 以触发缓存和作者填充逻辑
+        result.getMap().put("article", this.selectById(articleId));
+
         result.getMap().put("comments",
                 commentMapper.getAPageCommentByArticleId(
                         articleId, (int) ((pageParams.getPage()-1)*pageParams.getRows()), (int) pageParams.getRows()));
 
-        // 文章的点击次数+1
+        // 更新点击量
         Statistic statistic = statisticMapper.selectByArticleId(articleId);
         if (statistic == null) {
-            // 如果统计记录不存在，创建新的统计记录
             statistic = new Statistic();
             statistic.setArticleId(articleId);
-            statistic.setHits(1); // 第一次访问，点击量为1
+            statistic.setHits(1);
             statistic.setCommentsNum(0);
             statisticMapper.insert(statistic);
         } else {
-            // 统计记录存在，点击量+1
             statistic.setHits(statistic.getHits() + 1);
             statisticMapper.updateById(statistic);
         }
@@ -234,76 +225,90 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         return result;
     }
 
+    // 5. 更新文章
     @Override
     @CachePut(cacheNames = "article", key = "#article.id")
     public Article update(Article article) {
-        Article newArticle = articleService.selectById(article.getId());
-        // 20251217新增功能 - 修改DATE为DATETIME
+        // 先查原文章
+        Article newArticle = articleMapper.selectById(article.getId());
+
         newArticle.setModified(LocalDateTime.now());
         newArticle.setTags(article.getTags());
         newArticle.setContent(article.getContent());
         newArticle.setTitle(article.getTitle());
         newArticle.setThumbnail(article.getThumbnail());
-        // articleMapper使用从父类BaseMapper继承过来的updateById方法，更新表t_article中的文章
-
         newArticle.setUserId(article.getUserId());
+        // 如果你需要更新位置，取消下面这行的注释
+        // newArticle.setLocation(article.getLocation());
 
         articleMapper.updateById(newArticle);
 
+        fillArticleAuthor(newArticle);
         return newArticle;
     }
 
-    // 发布文章
+    // 6. 发布文章
     @Override
     @CachePut(cacheNames = "article", key = "#article.id")
-    @Transactional // 表示publish方法会被作为一个事务执行，确保文章和统计记录同时添加或均不添加
+    @Transactional
     public Article publish(Article article) {
-        // 20251217新增功能 - 修改DATE为DATETIME
         article.setCreated(LocalDateTime.now());
-        // articleMapper使用从父类BaseMapper继承过来的Insert方法，将文章添加到其t_article
         articleMapper.insert(article);
 
-        // 添加统计记录
         Statistic statistic = new Statistic();
         statistic.setArticleId(article.getId());
         statistic.setHits(0);
         statistic.setCommentsNum(0);
         statisticMapper.insert(statistic);
 
+        fillArticleAuthor(article);
         return article;
     }
 
-    @SneakyThrows // lombok注解，可以不写出异常的代码
+    // 7. 图片上传
+    @SneakyThrows
     @Override
     public String upload(MultipartFile file) {
-        // 2. 使用注入的变量替代硬编码
         final File folder = new File(uploadImagesDir);
         if (!folder.exists()) {
-            folder.mkdirs(); // 创建文件夹
+            folder.mkdirs();
         }
-        // 获得上传文件的扩展名
         String type = file.getOriginalFilename().substring(
                 file.getOriginalFilename().lastIndexOf(".")
         );
-        // 为文件随机取名
         final String newName = UUID.randomUUID() + type;
-        file.transferTo(new File(folder, newName)); // 保存文件
-        String url = "/api/images/" + newName; // 文件的相对网址
+        file.transferTo(new File(folder, newName));
+        String url = "/api/images/" + newName;
         return url;
     }
 
-    // 修改 selectById 方法，添加缓存注解
+    // 8. 单个文章查询
     @Override
-    @Cacheable(value = "article", key = "#id") // 这里的 value 是缓存名称，key 是参数 id
+    @Cacheable(value = "article", key = "#id")
     public Article selectById(Integer id) {
-        System.out.println("查询数据库: " + id); // 添加这行打印，方便你在控制台观察是否走了缓存
-        return articleMapper.selectById(id);
+        Article article = articleMapper.selectById(id);
+        fillArticleAuthor(article);
+        return article;
     }
 
+    // 9. 删除文章 (级联删除)
+    @Override
     @CacheEvict(cacheNames = "article", key = "#id")
+    @Transactional(rollbackFor = Exception.class) // 【新增】开启事务，确保删除操作原子性
     public void deleteById(Integer id) {
+        // 1. 删除文章本体
         articleMapper.deleteById(id);
+
+        // 2. 删除关联的评论数据
+        QueryWrapper<Comment> commentWrapper = new QueryWrapper<>();
+        commentWrapper.eq("article_id", id);
+        commentMapper.delete(commentWrapper);
+
+        // 3. 删除关联的统计数据
+        QueryWrapper<Statistic> statWrapper = new QueryWrapper<>();
+        statWrapper.eq("article_id", id);
+        statisticMapper.delete(statWrapper);
     }
+
+
 }
-
-

@@ -20,7 +20,7 @@ public class CategoryController {
 
     @Autowired
     private ArticleService articleService;
-    
+
     // 获取分类树
     @GetMapping("/getTree")
     public Result getTree() {

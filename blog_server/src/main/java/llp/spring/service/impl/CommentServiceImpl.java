@@ -1,6 +1,7 @@
 package llp.spring.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import llp.spring.entity.Comment;
@@ -30,16 +31,25 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         return comment;
     }
 
-    public Result getAPageCommentByArticleId(Integer articleId, PageParams pageParams){
-        //查询条件构造器QueryWrapper    Java代码方式设置查询条件
-        QueryWrapper wrapper = new QueryWrapper<>();
-        wrapper.eq("article_id", articleId); //eq表示相等，字段名是表的字段名，不是实体类的属性名
-        wrapper.orderBy(true, false, "id"); //排序，false表示降序
-        // 创建分页对象（1表示第一页；2表示每页大小为2）
+    public Result getAPageCommentByArticleId(Integer articleId, PageParams pageParams) {
         Page<Comment> page = new Page<>(pageParams.getPage(), pageParams.getRows());
-        Page<Comment> aPage = commentMapper.selectPage(page, wrapper);   //按条件进行分页查询
-        Result result=new Result();    //selectPage是继承的方法，可直接使用
-        result.getMap().put("comments", aPage.getRecords());
+        QueryWrapper<Comment> wrapper = new QueryWrapper<>();
+        wrapper.eq("article_id", articleId);
+
+        // === 【新增】评论排序逻辑 ===
+        if ("hot".equals(pageParams.getSort())) {
+            wrapper.orderByDesc("likes"); // 按点赞数
+        } else {
+            wrapper.orderByDesc("id");    // 按最新
+        }
+        // ==========================
+
+        IPage<Comment> iPage = commentMapper.selectPage(page, wrapper);
+
+        Result result = new Result();
+        result.setSuccess(true);
+        result.getMap().put("comments", iPage.getRecords());
+        result.getMap().put("total", iPage.getTotal());
         return result;
     }
 

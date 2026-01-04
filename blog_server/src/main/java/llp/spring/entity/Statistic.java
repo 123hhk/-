@@ -39,4 +39,9 @@ public class Statistic implements Serializable {
      * 文章评论总量
      */
     private Integer commentsNum;
+
+    /**
+     * 【新增】文章点赞量
+     */
+    private Integer likes;
 }
