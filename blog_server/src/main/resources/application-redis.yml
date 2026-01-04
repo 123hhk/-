@@ -1,0 +1,13 @@
+spring:
+  redis:
+    host: 127.0.0.1       # Redis 服务器地址
+    port: 6379            # Redis 端口
+    password:             # 默认为空，如果有密码请填写
+    database: 0           # 指定使用的数据库编号
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 0

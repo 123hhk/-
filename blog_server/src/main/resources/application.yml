@@ -1,0 +1,31 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      force: true
+      charset: UTF-8
+      enabled: true
+  tomcat:
+    uri-encoding: UTF-8
+
+spring:
+  profiles:
+    active: jdbc, redis  # 同时激活 jdbc 和 redis 配置
+  # 解决静态资源映射问题（Spring Boot 2.6+ 需要）
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath*:/mapper/*.xml
+
+# ... 上面的内容保持不变 ...
+
+# 自定义文件上传路径
+file:
+  upload-images-dir: C:\Users\24928\Pictures\img\
+  # [新增] 新的头像/文件上传保存路径 (注意最后带上斜杠)
+  upload-avatar-dir: C:\Users\24928\Pictures\imgs\
+  article-img-dir: C:\Users\24928\Pictures\images\

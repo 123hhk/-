@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="llp.spring.mapper.ArticleMapper"> <!-- xml文件对应的mapper接口 -->
+
+    <!-- id的值对应mapper中的一个方法getAPage -->
+    <select id="getAPage" resultType="llp.spring.entity.Article"> <!-- 返回值类型 -->
+        select * from t_article ORDER BY id DESC limit #{offset},#{size} <!-- 分页查询语句，可以带参数，如#{offset} -->
+    </select>
+
+</mapper>
